@@ -230,8 +230,9 @@ def make_null_envelope() -> Envelope:
 
     def apply(*, ae: torch.Tensor, r_ae: torch.Tensor,
               r_ee: torch.Tensor) -> torch.Tensor:
+        device = ae.device
         del ae, r_ae, r_ee
-        return torch.ones(1, device=ae.device)
+        return torch.ones(1, device=device)
 
     return Envelope(EnvelopeType.PRE_DETERMINANT, init, apply)
 
