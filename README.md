@@ -13,7 +13,16 @@ WARNING: This is a research-level release of a JAX implementation and is under
 active development. The original TensorFlow implementation can be found in the
 `tf` branch.
 
+## Implementations
+
+FermiNet is available in two deep learning frameworks:
+
+- **JAX** (original implementation): The main implementation in the `ferminet/` directory
+- **PyTorch** (new port): Available in the `ferminet_torch/` directory
+
 ## Installation
+
+### JAX Implementation
 
 `pip install -e .` will install all required dependencies. This is best done
 inside a [virtual environment](https://docs.python-guide.org/dev/virtualenvs/).
@@ -44,7 +53,30 @@ pip install -e '.[testing]'
 python -m pytest
 ```
 
+### PyTorch Implementation
+
+To install the PyTorch implementation:
+
+```shell
+cd ferminet_torch
+pip install -e .
+```
+
+For GPU support, make sure you have installed PyTorch with CUDA:
+
+```shell
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
+```
+
+To run the tests for the PyTorch implementation:
+
+```shell
+python -m unittest discover ferminet_torch/tests
+```
+
 ## Usage
+
+### JAX Implementation
 
 ferminet uses the `ConfigDict` from
 [ml_collections](https://github.com/google/ml_collections) to configure the
@@ -155,6 +187,43 @@ Note: to train on larger atoms and molecules with large batch sizes, multi-GPU
 parallelisation is essential. This is supported via JAX's
 [pmap](https://jax.readthedocs.io/en/latest/jax.html#parallelization-pmap).
 Multiple GPUs will be automatically detected and used if available.
+
+### PyTorch Implementation
+
+The PyTorch implementation provides a more object-oriented approach to FermiNet. Here's a simple example:
+
+```python
+import torch
+from ferminet_torch import networks
+from ferminet_torch import envelopes
+
+# Define system parameters
+nspins = (1, 1)  # 1 spin-up and 1 spin-down electron
+charges = torch.tensor([1.0])  # Nuclear charge
+
+# Create random electron positions, spins, and atom positions
+pos = torch.randn(sum(nspins) * 3)  # 3D positions for each electron
+spins = torch.tensor([0, 1])  # Spin-up and spin-down
+atoms = torch.zeros(1, 3)  # Atom at origin
+
+# Create FermiNet model
+model = networks.make_fermi_net(
+    nspins=nspins,
+    charges=charges,
+    determinants=4,
+    hidden_dims=((32, 16), (32, 16)),
+    envelope_label=envelopes.EnvelopeLabel.ISOTROPIC
+)
+
+# Forward pass
+sign, logdet = model(pos, spins, atoms, charges)
+```
+
+To run the example script:
+
+```shell
+python -m ferminet_torch.example
+```
 
 ### Inference
 
