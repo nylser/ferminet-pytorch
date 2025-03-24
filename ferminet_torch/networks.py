@@ -316,15 +316,28 @@ def construct_input_features(
         terms are also zero.
     """
     assert atoms.shape[1] == ndim
-    ae = pos.reshape(-1, 1, ndim) - atoms[None, ...]
-    ee = pos.reshape(1, -1, ndim) - pos.reshape(-1, 1, ndim)
+    
+    # Reshape pos to get the correct number of electrons
+    nelectrons = pos.shape[0] // ndim
+    pos = pos.reshape(nelectrons, ndim)
+    
+    # Calculate atom-electron vectors
+    ae = pos.unsqueeze(1) - atoms.unsqueeze(0)  # (nelectron, natom, ndim)
+    
+    # Calculate electron-electron vectors
+    ee = pos.unsqueeze(1) - pos.unsqueeze(0)  # (nelectron, nelectron, ndim)
 
+    # Calculate distances
     r_ae = torch.linalg.norm(ae, dim=2, keepdim=True)
-    # Avoid computing the norm of zero, as is has undefined grad
+    
+    # Avoid computing the norm of zero, as it has undefined grad
     n = ee.shape[0]
     eye = torch.eye(n, device=pos.device)
-    r_ee = (
-        torch.linalg.norm(ee + eye[..., None], dim=-1) * (1.0 - eye))
+    
+    # Add a small offset to the diagonal to avoid zero distance
+    ee_offset = ee + eye.unsqueeze(-1) * 1e-8
+    r_ee = torch.linalg.norm(ee_offset, dim=-1) * (1.0 - eye)
+    
     return ae, ee, r_ae, r_ee[..., None]
 
 
@@ -678,6 +691,9 @@ class FermiNet(nn.Module):
         Returns:
             List of orbitals
         """
+        # Ensure pos is the right shape
+        pos = pos.reshape(-1)
+        
         # Construct input features
         ae, ee, r_ae, r_ee = construct_input_features(pos, atoms, ndim=self.ndim)
         
@@ -730,11 +746,18 @@ class FermiNet(nn.Module):
                 r_ae_channels = torch.split(r_ae, self.nspins, dim=0)
                 r_ee_channels = torch.split(r_ee, self.nspins, dim=0)
                 
-                ae_channel = ae_channels[i]
-                r_ae_channel = r_ae_channels[i]
-                r_ee_channel = r_ee_channels[i]
+                # Only use active spin channels
+                active_indices = [j for j, spin in enumerate(self.nspins) if spin > 0]
+                ae_channel = ae_channels[active_indices[i]]
+                r_ae_channel = r_ae_channels[active_indices[i]]
+                r_ee_channel = r_ee_channels[active_indices[i]]
                 
                 envelope_factor = self.envelope[i](ae_channel, r_ae_channel, r_ee_channel)
+                
+                # Ensure envelope_factor has the right shape for multiplication
+                if envelope_factor.dim() == 1:
+                    envelope_factor = envelope_factor.unsqueeze(1)
+                
                 orbital = orbital * envelope_factor
             
             # Handle complex output

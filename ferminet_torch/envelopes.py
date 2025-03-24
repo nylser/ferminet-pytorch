@@ -90,17 +90,23 @@ class Envelope:
 def _apply_covariance(x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
     """Equivalent to einsum('ijk,kmjn->ijmn', x, y)."""
     # We can avoid first reshape - just make params['sigma'] rank 3
-    i, _, _ = x.shape
-    k, m, j, n = y.shape
-    x = x.transpose(1, 0, 2)
-    y = y.transpose(2, 0, 1, 3).reshape(j, k, m * n)
+    i, j, k = x.shape
+    k_y, m, j_y, n = y.shape
+    
+    # Ensure dimensions match
+    assert k == k_y, f"Inner dimensions must match: {k} vs {k_y}"
+    assert j == j_y, f"Dimensions must match: {j} vs {j_y}"
+    
+    # Reshape for batch matrix multiplication
+    x_reshaped = x.permute(1, 0, 2)  # j, i, k
+    y_reshaped = y.permute(2, 0, 1, 3).reshape(j, k, m * n)  # j, k, m*n
     
     # Vectorized dot product
     result = torch.zeros((j, i, m, n), device=x.device)
     for idx in range(j):
-        result[idx] = torch.matmul(x[idx], y[idx]).reshape(i, m, n)
+        result[idx] = torch.matmul(x_reshaped[idx], y_reshaped[idx]).reshape(i, m, n)
     
-    return result.transpose(1, 0, 2, 3)
+    return result.permute(1, 0, 2, 3)  # i, j, m, n
 
 
 def make_isotropic_envelope() -> Envelope:

@@ -28,6 +28,7 @@ def main():
     
     # Create random electron positions, spins, and atom positions
     pos = torch.randn(sum(nspins) * 3)  # 3D positions for each electron
+    pos = pos.reshape(-1)  # Ensure pos is a 1D tensor
     spins = torch.tensor([0, 1])  # Spin-up and spin-down
     atoms = torch.zeros(natoms, 3)  # Atom at origin
     
@@ -40,20 +41,27 @@ def main():
         envelope_label=envelopes.EnvelopeLabel.ISOTROPIC
     )
     
-    # Forward pass
-    sign, logdet = model(pos, spins, atoms, charges)
-    
+    # Print model structure
     print(f"Model parameters: {sum(p.numel() for p in model.parameters())}")
-    print(f"Sign: {sign}")
-    print(f"Log determinant: {logdet}")
     
-    # Compute gradients
-    logdet.backward()
-    
-    # Print parameter gradients
-    for name, param in model.named_parameters():
-        if param.grad is not None:
-            print(f"{name}: grad shape {param.grad.shape}, grad norm {param.grad.norm()}")
+    try:
+        # Forward pass
+        sign, logdet = model(pos, spins, atoms, charges)
+        
+        print(f"Sign: {sign}")
+        print(f"Log determinant: {logdet}")
+        
+        # Compute gradients
+        logdet.backward()
+        
+        # Print parameter gradients
+        for name, param in model.named_parameters():
+            if param.grad is not None:
+                print(f"{name}: grad shape {param.grad.shape}, grad norm {param.grad.norm()}")
+    except Exception as e:
+        print(f"Error during forward pass: {e}")
+        import traceback
+        traceback.print_exc()
 
 
 if __name__ == "__main__":

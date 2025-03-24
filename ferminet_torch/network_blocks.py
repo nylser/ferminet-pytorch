@@ -157,6 +157,11 @@ def logdet_matmul(
         determinant (or product of the i-th determinant in each spin channel, if
         full_det is not used).
     """
+    # Handle empty sequence case
+    if not xs:
+        device = w.device if w is not None else torch.device('cpu')
+        return torch.tensor(1.0, device=device), torch.tensor(0.0, device=device)
+        
     # 1x1 determinants appear to be numerically sensitive and can become 0
     # (especially when multiple determinants are used with the spin-factored
     # wavefunction). Avoid this by not going into the log domain for 1x1 matrices.
@@ -166,20 +171,36 @@ def logdet_matmul(
                            [x.reshape(-1) for x in xs if x.shape[-1] == 1], 
                            torch.tensor(1.0, device=xs[0].device))
     
-    # Pass initial value to functools so sign_in = 1, logdet = 0 if all matrices
-    # are 1x1.
-    phase_in, logdet = functools.reduce(
-        lambda a, b: (a[0] * b[0], a[1] + b[1]),
-        [slogdet(x) for x in xs if x.shape[-1] > 1], 
-        (torch.tensor(1.0, device=xs[0].device), torch.tensor(0.0, device=xs[0].device)))
-
-    # log-sum-exp trick
-    maxlogdet = torch.max(logdet)
-    det = phase_in * det1d * torch.exp(logdet - maxlogdet)
+    # Check if there are any matrices larger than 1x1
+    large_matrices = [x for x in xs if x.shape[-1] > 1]
+    
+    if large_matrices:
+        # Pass initial value to functools so sign_in = 1, logdet = 0 if all matrices
+        # are 1x1.
+        phase_in, logdet = functools.reduce(
+            lambda a, b: (a[0] * b[0], a[1] + b[1]),
+            [slogdet(x) for x in large_matrices], 
+            (torch.tensor(1.0, device=xs[0].device), torch.tensor(0.0, device=xs[0].device)))
+            
+        # log-sum-exp trick
+        if logdet.dim() > 0 and logdet.shape[0] > 0:
+            maxlogdet = torch.max(logdet)
+            det = phase_in * det1d * torch.exp(logdet - maxlogdet)
+        else:
+            maxlogdet = torch.tensor(0.0, device=xs[0].device)
+            det = phase_in * det1d
+    else:
+        # All matrices are 1x1
+        phase_in = torch.tensor(1.0, device=xs[0].device)
+        maxlogdet = torch.tensor(0.0, device=xs[0].device)
+        det = det1d
+    
     if w is None:
         result = torch.sum(det)
     else:
-        result = torch.matmul(det, w)[0]
+        result = torch.matmul(det, w)
+        if result.dim() > 0:
+            result = result[0]
     
     # return phase as a unit-norm complex number, rather than as an angle
     if torch.is_complex(result):
@@ -187,7 +208,7 @@ def logdet_matmul(
     else:
         phase_out = torch.sign(result)
     
-    log_out = torch.log(torch.abs(result)) + maxlogdet
+    log_out = torch.log(torch.abs(result) + 1e-10) + maxlogdet
     return phase_out, log_out
 
 
