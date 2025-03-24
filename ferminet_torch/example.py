@@ -27,8 +27,8 @@ def main():
     charges = torch.tensor([1.0])  # Nuclear charge
     
     # Create random electron positions, spins, and atom positions
-    pos = torch.randn(sum(nspins) * 3)  # 3D positions for each electron
-    pos = pos.reshape(-1)  # Ensure pos is a 1D tensor
+    pos = torch.randn(sum(nspins), 3)  # 3D positions for each electron
+    pos = pos.reshape(-1)  # Flatten to 1D tensor
     spins = torch.tensor([0, 1])  # Spin-up and spin-down
     atoms = torch.zeros(natoms, 3)  # Atom at origin
     
@@ -37,7 +37,7 @@ def main():
         nspins=nspins,
         charges=charges,
         determinants=4,
-        hidden_dims=((32, 16), (32, 16)),
+        hidden_dims=((16, 8), (16, 8)),  # Reduced dimensions to match input size
         envelope_label=envelopes.EnvelopeLabel.ISOTROPIC
     )
     

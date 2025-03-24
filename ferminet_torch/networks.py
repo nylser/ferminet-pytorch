@@ -318,7 +318,7 @@ def construct_input_features(
     assert atoms.shape[1] == ndim
     
     # Reshape pos to get the correct number of electrons
-    nelectrons = pos.shape[0] // ndim
+    nelectrons = pos.numel() // ndim
     pos = pos.reshape(nelectrons, ndim)
     
     # Calculate atom-electron vectors
@@ -549,8 +549,8 @@ class FermiNet(nn.Module):
         self.feature_layer = FermiNetFeatures(natoms, ndim, rescale_inputs)
         
         # Calculate input dimensions
-        num_one_features = natoms * (ndim + 1)
-        num_two_features = ndim + 1
+        num_one_features = natoms * (ndim + 1)  # natom * (ndim + 1) for ae_features
+        num_two_features = ndim + 1  # ndim + 1 for ee_features
         
         # Calculate number of active spin channels
         self.active_spin_channels = [spin for spin in nspins if spin > 0]
@@ -564,10 +564,15 @@ class FermiNet(nn.Module):
         for i, (dims_one_out, dims_two_out) in enumerate(hidden_dims):
             # Calculate input dimension for one-electron stream
             if i > 0:
-                dims_one_in = nfeatures(dims_one_in, dims_two_in, 0)
+                # For layers after the first, input dimension is calculated from previous layer outputs
+                dims_one_in = nfeatures(dims_one_out, dims_two_out, 0)
             else:
                 # First layer has direct input from feature layer
-                pass
+                # For the first layer, we need to calculate the input dimension based on the symmetric features
+                if i == 0:
+                    # For the first layer, input comes from construct_symmetric_features
+                    # which combines h_one and means of h_one and h_two
+                    dims_one_in = num_one_features + len(self.active_spin_channels) * num_one_features + len(self.active_spin_channels) * num_two_features
             
             # Add layer
             self.layers.append(
@@ -789,8 +794,8 @@ def nfeatures(out1: int, out2: int, aux: int) -> int:
     Returns:
         Number of features
     """
-    # For simplicity, we assume 2 spin channels (up and down)
-    return 3 * out1 + 2 * out2 + aux
+    # Calculate based on actual dimensions
+    return out1 + 2 * out1 + 2 * out2 + aux
 
 
 def make_fermi_net(
