@@ -17,7 +17,7 @@
 import enum
 from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence, Tuple, Union
 
-import attr
+import attrs
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -80,7 +80,7 @@ class EnvelopeApply(Protocol):
         """
 
 
-@attr.s(auto_attribs=True)
+@attrs.define(auto_attribs=True)
 class Envelope:
     apply_type: EnvelopeType
     init: EnvelopeInit
